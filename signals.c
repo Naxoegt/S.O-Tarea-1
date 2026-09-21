@@ -26,7 +26,7 @@ void signals_init_shell(void) {
         perror("mishell: error configurando SIGTTOU");
     }
 }
-
+ 
 void signals_setup_child(void) {
     struct sigaction sa_default;
     sa_default.sa_handler = SIG_DFL;
