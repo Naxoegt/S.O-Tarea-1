@@ -38,7 +38,9 @@ typedef struct Job {
     pid_t pid;               
     char *cmd_line;         
     char *state;             
-    struct Job *next;        
+    struct Job *next;
+    int finished;
+    int exit_status;        
 } Job;
 
 #endif
