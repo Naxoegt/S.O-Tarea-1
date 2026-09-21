@@ -2,9 +2,9 @@ CC = gcc
 CFLAGS = -Wall -Wextra -std=gnu11 -D_GNU_SOURCE
 TARGET = mishell
 
-SRCS = main.c parser.c executor.c signals.c jobs.c
+SRCS = main.c parser.c executor.c signals.c jobs.c pmon.c
 OBJS = $(SRCS:.c=.o)
-HEADERS = defs.h parser.h executor.h signals.h jobs.h
+HEADERS = defs.h parser.h executor.h signals.h jobs.h pmon.h
 
 all: $(TARGET)
 

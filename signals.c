@@ -39,7 +39,7 @@ void signals_setup_child(void) {
     sigaction(SIGTTIN, &sa_default, NULL);
     sigaction(SIGTTOU, &sa_default, NULL);
 }
- */
+
 void signals_setup_sigchld(void (*handler)(int)) {
     struct sigaction sa_chld;
     sa_chld.sa_handler = handler ? handler : SIG_DFL;

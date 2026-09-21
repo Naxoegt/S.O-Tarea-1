@@ -51,10 +51,38 @@ void jobs_print(void) {
     }
 }
 
+#include "pmon.h"
+
+// retorna la cabeza de la lista de jobs
+Job *jobs_get_head(void) {
+    return job_list_head;
+}
+
+// elimina un proceso de la lista si ya termino
+void jobs_remove(pid_t pid) {
+    Job *curr = job_list_head;
+    Job *prev = NULL;
+
+    while (curr != NULL) {
+        if (curr->pid == pid) {
+            if (prev == NULL) {
+                job_list_head = curr->next;
+            } else {
+                prev->next = curr->next;
+            }
+            if (curr->cmd_line) free(curr->cmd_line);
+            if (curr->state) free(curr->state);
+            free(curr);
+            return;
+        }
+        prev = curr;
+        curr = curr->next;
+    }
+}
+
+// ejecuta el comando interno pmon
 int builtin_pmon(char **args) {
-    (void)args;
-    printf("AGREGAR FUNCIONALIDAD DE PMON,aun no está listo");
-    return 0;
+    return pmon_run(args);
 }
 
 void jobs_cleanup(void) {
