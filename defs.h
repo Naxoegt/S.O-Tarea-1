@@ -1,7 +1,9 @@
 #ifndef DEFS_H
 #define DEFS_H
 
+#ifndef _GNU_SOURCE
 #define _GNU_SOURCE
+#endif
 #include <sys/types.h>
 #include <stdbool.h>
 
