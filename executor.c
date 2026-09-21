@@ -12,14 +12,14 @@
 #include <sys/types.h>
 #include <errno.h>
 
+// guardamos pgid de la shell para poder devolver control a la terminal luego de un tcsetpgrp (foreground)
 static pid_t shell_pgid;
-
 
 void executor_init(void) {
     shell_pgid = getpgrp();
 }
 
-
+// devuelve true si el comando es built-ins, false si es externo
 bool is_builtin(const char *cmd_name) {
     if (!cmd_name) return false;
     return (strcmp(cmd_name, "cd") == 0 ||
@@ -28,8 +28,9 @@ bool is_builtin(const char *cmd_name) {
             strcmp(cmd_name, "pmon") == 0);
 }
 
-
+// aplicación de redirecciones de un comando sobre descriptores estándar del proceso actual
 static int apply_redirections(const SimpleCommand *cmd) {
+    // se llama siempre en el proceso hijo
     if (cmd->input_file != NULL) {
         int fd_in = open(cmd->input_file, O_RDONLY);
         if (fd_in < 0) {
@@ -45,6 +46,7 @@ static int apply_redirections(const SimpleCommand *cmd) {
     }
 
     if (cmd->output_file != NULL) {
+        // > : O_TRUNC, crea o trunca
         int fd_out = open(cmd->output_file, O_WRONLY | O_CREAT | O_TRUNC, 0644);
         if (fd_out < 0) {
             perror("mishell: error al abrir archivo de salida");
@@ -59,6 +61,7 @@ static int apply_redirections(const SimpleCommand *cmd) {
     }
 
     if (cmd->append_file != NULL) {
+        // >> : O_APPEND, no trunca, agrega al final
         int fd_app = open(cmd->append_file, O_WRONLY | O_CREAT | O_APPEND, 0644);
         if (fd_app < 0) {
             perror("mishell: error al abrir archivo para append");
@@ -75,6 +78,7 @@ static int apply_redirections(const SimpleCommand *cmd) {
     return 0;
 }
 
+// built-in en el proceso de la shell
 int execute_builtin(SimpleCommand *cmd, Pipeline *pipeline, char *raw_line) {
     if (!cmd || cmd->argc == 0) return 0;
     int saved_stdin = -1;
@@ -92,7 +96,7 @@ int execute_builtin(SimpleCommand *cmd, Pipeline *pipeline, char *raw_line) {
     }
 
     int ret_code = 0;
-
+    // cd sin arg o con '~' va a $HOME.
     if (strcmp(cmd->args[0], "cd") == 0) {
         const char *target = NULL;
         if (cmd->argc == 1 || strcmp(cmd->args[1], "~") == 0) {
@@ -111,6 +115,7 @@ int execute_builtin(SimpleCommand *cmd, Pipeline *pipeline, char *raw_line) {
         }
     }
     else if (strcmp(cmd->args[0], "exit") == 0) {
+        // limpieza antes de exit
         int exit_val = 0;
         if (cmd->argc > 1) {
             exit_val = atoi(cmd->args[1]);
@@ -131,6 +136,7 @@ int execute_builtin(SimpleCommand *cmd, Pipeline *pipeline, char *raw_line) {
     else if (strcmp(cmd->args[0], "pmon") == 0) {
         ret_code = builtin_pmon(cmd->args);
     }
+    // restauramos los descriptores originales
     if (has_redirection) {
         if (saved_stdin >= 0) {
             dup2(saved_stdin, STDIN_FILENO);
@@ -145,7 +151,7 @@ int execute_builtin(SimpleCommand *cmd, Pipeline *pipeline, char *raw_line) {
     return ret_code;
 }
 
-
+// caso 1: solo un comando sin pipe
 static int execute_single_external(Pipeline *pipeline, const char *raw_line) {
     SimpleCommand *cmd = &pipeline->commands[0];
 
@@ -155,22 +161,27 @@ static int execute_single_external(Pipeline *pipeline, const char *raw_line) {
         return -1;
     }
 
+    // HIJO
     if (pid == 0) {
         setpgid(0, 0);
-
+        // creamos grupo de procesos propio, que luego servirá para mandar señales al job entero y tcsetpgrp
+        // si es foreground y hay terminal, el hijo pasa a ser el grupo foreground
         if (!pipeline->is_background && isatty(STDIN_FILENO)) {
             tcsetpgrp(STDIN_FILENO, getpid());
         }
-
+        // restauramos sigint/sigquit/sigtstp a sig_dfl (así no hereda el sig_ign de la shell)
         signals_setup_child();
 
         if (apply_redirections(cmd) < 0) {
             _exit(EXIT_FAILURE);
         }
         execvp(cmd->args[0], cmd->args);
-        perror("mishell");
+        perror("mishell"); // si execvp falla, imprimimos error y salimos con código 127
         _exit(127);
     }
+
+    // PADRE
+    // hacemos setpgid 
     setpgid(pid, pid);
 
     if (pipeline->is_background) {
@@ -178,17 +189,20 @@ static int execute_single_external(Pipeline *pipeline, const char *raw_line) {
         jobs_add(pid, raw_line, 1);
         return 0;
     } else {
+        // foreground, le damos el terminal al proceso hijo y esperamos
         if (isatty(STDIN_FILENO)) {
             tcsetpgrp(STDIN_FILENO, pid);
         }
 
         int status = 0;
         if (waitpid(pid, &status, WUNTRACED) < 0) {
+            // WUNTRACED para detectar Ctrl+Z
             if (errno != ECHILD) {
                 perror("mishell: error en waitpid");
             }
         }
 
+        // luego nos devolvemos el terminal
         if (isatty(STDIN_FILENO)) {
             tcsetpgrp(STDIN_FILENO, shell_pgid);
         }
@@ -197,6 +211,9 @@ static int execute_single_external(Pipeline *pipeline, const char *raw_line) {
     }
 }
 
+// Pipeline de tamaño N de comandos.
+// se crean N-1 pipes, cada hijo lee de la pipe anterior y escribe en la pipe siguiente.
+// todos los hijos cierran todas las pipes que no usan. 
 static int execute_pipeline_arbitrary(Pipeline *pipeline, const char *raw_line) {
     int n = pipeline->cmd_count;
     int (*pipes)[2] = malloc((n - 1) * sizeof(int[2]));
@@ -228,6 +245,7 @@ static int execute_pipeline_arbitrary(Pipeline *pipeline, const char *raw_line) 
         return -1;
     }
 
+    // pgid=pid del primer hijo, todos los hijos se unen a ese grupo de procesos
     pid_t pgid = 0;
 
     for (int i = 0; i < n; i++) {
@@ -238,7 +256,7 @@ static int execute_pipeline_arbitrary(Pipeline *pipeline, const char *raw_line) 
         }
 
         if (pids[i] == 0) {
-
+            // primer hijo crea el grupo, los demás se le unen
             if (i == 0) {
                 pgid = getpid();
             }
@@ -248,6 +266,9 @@ static int execute_pipeline_arbitrary(Pipeline *pipeline, const char *raw_line) 
                 tcsetpgrp(STDIN_FILENO, pgid);
             }
             signals_setup_child();
+
+            // entrada: si no es el primer comando, lee de la pipe anterior
+            // salida: si no es el último comando, escribe en la pipe actual
             if (i > 0) {
                 if (dup2(pipes[i - 1][0], STDIN_FILENO) < 0) {
                     perror("mishell: dup2 entrada pipe");
@@ -261,7 +282,8 @@ static int execute_pipeline_arbitrary(Pipeline *pipeline, const char *raw_line) 
                     _exit(EXIT_FAILURE);
                 }
             }
-
+            
+            // cerramos los descriptores de pipe 
             for (int j = 0; j < n - 1; j++) {
                 close(pipes[j][0]);
                 close(pipes[j][1]);
@@ -270,6 +292,7 @@ static int execute_pipeline_arbitrary(Pipeline *pipeline, const char *raw_line) 
             if (apply_redirections(&pipeline->commands[i]) < 0) {
                 _exit(EXIT_FAILURE);
             }
+            // si hay built-in en medio de un pipeline, se ejecuta en el hijo 
             if (is_builtin(pipeline->commands[i].args[0])) {
                 int ret = execute_builtin(&pipeline->commands[i], pipeline, NULL);
                 _exit(ret);
@@ -285,6 +308,7 @@ static int execute_pipeline_arbitrary(Pipeline *pipeline, const char *raw_line) 
         setpgid(pids[i], pgid);
     }
 
+    // cerramos los descriptortes del padre
     for (int j = 0; j < n - 1; j++) {
         close(pipes[j][0]);
         close(pipes[j][1]);
@@ -301,6 +325,8 @@ static int execute_pipeline_arbitrary(Pipeline *pipeline, const char *raw_line) 
     if (isatty(STDIN_FILENO)) {
         tcsetpgrp(STDIN_FILENO, pgid);
     }
+
+    // esperamos a los hijos del pipeline
     int last_status = 0;
     for (int i = 0; i < n; i++) {
         int status = 0;
@@ -318,7 +344,7 @@ static int execute_pipeline_arbitrary(Pipeline *pipeline, const char *raw_line) 
     return WIFEXITED(last_status) ? WEXITSTATUS(last_status) : 1;
 }
 
-
+// se elige ruta según cantidad de comandos y si es built-in 
 int execute_pipeline(Pipeline *pipeline, const char *raw_line) {
     if (!pipeline || pipeline->cmd_count == 0) return 0;
     if (pipeline->cmd_count == 1) {
