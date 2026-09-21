@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
+#include <unistd.h>
 
 static Job *job_list_head = NULL;
 static int next_job_id = 1;
@@ -27,6 +29,8 @@ void jobs_add(pid_t pid, const char *cmd, int is_bg) {
     new_job->cmd_line = cmd ? strdup(cmd) : strdup("<desconocido>");
     new_job->state = strdup("ejecutando");
     new_job->next = NULL;
+    new_job->finished = 0;
+    new_job->exit_status = 0;
 
     if (job_list_head == NULL) {
         job_list_head = new_job;
@@ -52,6 +56,43 @@ void jobs_print(void) {
         curr = curr->next;
     }
 }
+
+// marcamos un job como terminado y guardamos estado. Se llama el manejador de SIGCHLD
+void jobs_mark_finished(pid_t pid, int status) {
+    Job *curr = job_list_head;
+    while (curr != NULL) {
+        if (curr->pid == pid && !curr->finished) {
+            curr->finished = 1;
+            curr->exit_status = status;
+            return;
+        }
+        curr = curr->next;
+    }
+}
+
+// notificamos al usuario los jobs que terminaron y los eliminamos de la lista. Se llama desde el loop principal
+void jobs_notify_and_clean(void) {
+    Job *curr = job_list_head;
+    Job *prev = NULL;
+    while (curr != NULL) {
+        Job *next = curr->next;
+        if (curr->finished) {
+            printf("[%d]+  Done    %s\n", curr->job_id, curr->cmd_line);
+            if (prev == NULL) {
+                job_list_head = next;
+            } else {
+                prev->next = next;
+            }
+            free(curr->cmd_line);
+            free(curr->state);
+            free(curr);
+        } else {
+            prev = curr;
+        }
+        curr = next;
+    }
+}
+
 
 int builtin_pmon(char **args) {
     (void)args;
