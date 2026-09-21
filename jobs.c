@@ -11,6 +11,8 @@ void jobs_init(void) {
     next_job_id = 1;
 }
 
+// insertamos al final de la lista
+// para un pipeline en backround se debe guardar todos los pids pero por ahora se guarda uno
 void jobs_add(pid_t pid, const char *cmd, int is_bg) {
     (void)is_bg;
 
@@ -19,7 +21,7 @@ void jobs_add(pid_t pid, const char *cmd, int is_bg) {
         perror("mishell: error al asignar memoria para job");
         return;
     }
-
+    // registro del numero de job y PID
     new_job->job_id = next_job_id++;
     new_job->pid = pid;
     new_job->cmd_line = cmd ? strdup(cmd) : strdup("<desconocido>");
