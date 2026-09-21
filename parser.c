@@ -4,6 +4,7 @@
 #include <string.h>
 #include <ctype.h>
 
+// getline() evitará el problema de fgets con líneas, devuelve null en ctrl+D
 char *read_line(void) {
     char *line = NULL;
     size_t bufsize = 0;
@@ -22,6 +23,7 @@ char *read_line(void) {
     return line;
 }
 
+/* duplicamos cada vez que se llena, así el arreglo de tokens no crece de forma excesiva */
 static void add_token(char ***tokens, int *count, int *capacity, const char *token_str) {
     if (*count + 1 >= *capacity) {
         *capacity = (*capacity == 0) ? 16 : (*capacity * 2);
@@ -44,6 +46,7 @@ static void free_tokens(char **tokens, int count) {
     free(tokens);
 }
 
+// Esta función es un tokenizador para manejar caracteres especiales
 static char **tokenize_line(const char *raw_line, int *token_count) {
     char **tokens = NULL;
     int count = 0;
@@ -154,6 +157,8 @@ void free_pipeline(Pipeline *pipeline) {
     free(pipeline);
 }
 
+// esta función es como el punto de entrada para parsear la línea de comandos
+// recorre los tokens y construye la estructura pipeline
 Pipeline *parse_command_line(const char *raw_line) {
     if (!raw_line) return NULL;
 
@@ -166,6 +171,7 @@ Pipeline *parse_command_line(const char *raw_line) {
     }
 
     bool is_bg = false;
+    // si la última cosa es "&", entonces es un comando en background
     if (strcmp(tokens[token_count - 1], "&") == 0) {
         is_bg = true;
         free(tokens[token_count - 1]);
@@ -177,7 +183,7 @@ Pipeline *parse_command_line(const char *raw_line) {
         free_tokens(tokens, token_count);
         return NULL;
     }
-
+    //validación de sintaxis
     if (strcmp(tokens[0], "|") == 0 || strcmp(tokens[token_count - 1], "|") == 0) {
         fprintf(stderr, "mishell: error de sintaxis cerca del token no esperado '|'\n");
         free_tokens(tokens, token_count);
@@ -185,6 +191,8 @@ Pipeline *parse_command_line(const char *raw_line) {
     }
 
     int num_cmds = 1;
+    // 
+    // 1: contamos cuántos comandos hay para reservar arreglos de SimpleCommand
     for (int i = 0; i < token_count; i++) {
         if (strcmp(tokens[i], "|") == 0) {
             if (i + 1 < token_count && strcmp(tokens[i + 1], "|") == 0) {
@@ -213,6 +221,7 @@ Pipeline *parse_command_line(const char *raw_line) {
         return NULL;
     }
 
+    // 2: construimos cada SimpleCommand. si hay pipeline cerramos el actual comando y seguimos con el siguiente
     int cmd_idx = 0;
     int arg_cap = 16;
     pipeline->commands[cmd_idx].args = malloc(arg_cap * sizeof(char *));
@@ -291,6 +300,7 @@ Pipeline *parse_command_line(const char *raw_line) {
         pipeline->commands[cmd_idx].args[pipeline->commands[cmd_idx].argc++] = strdup(tok);
     }
 
+    // cerramos el último comando
     pipeline->commands[cmd_idx].args[pipeline->commands[cmd_idx].argc] = NULL;
     if (pipeline->commands[cmd_idx].argc == 0) {
         fprintf(stderr, "mishell: error de sintaxis: comando vacío en tubería\n");
