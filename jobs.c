@@ -21,7 +21,7 @@ int jobs_add(pid_t pid, const char *cmd, int is_bg) {
     Job *new_job = malloc(sizeof(Job));
     if (!new_job) {
         perror("mishell: error al asignar memoria para job");
-        return;
+        return -1;
     }
     // registro del numero de job y PID
     new_job->job_id = next_job_id++;

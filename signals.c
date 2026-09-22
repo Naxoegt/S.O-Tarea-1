@@ -7,14 +7,14 @@
 #include <errno.h>
 
 // manejador de SIGCHLD 
-static void sigchld_handler(int sig) {
-    (void)sig;
-    int status;
-    pid_t pid;
-    while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
-        jobs_mark_finished(pid, status);
-    }
-}
+// static void sigchld_handler(int sig) {
+//     (void)sig;
+//     int status;
+//     pid_t pid;
+//     while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+//         jobs_mark_finished(pid, status);
+//     }
+// }
 
 void signals_init_shell(void) {
     struct sigaction sa_ignore;
