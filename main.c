@@ -33,9 +33,11 @@ static void print_prompt(void) {
 
 int main(void) {
     signals_init_shell();
+    signals_setup_sigchld(sigchld_handler);
     jobs_init();
     executor_init();
     while (1) {
+        jobs_notify_and_clean();
         print_prompt();
         char *line = read_line();
 
