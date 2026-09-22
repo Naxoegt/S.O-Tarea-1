@@ -6,9 +6,7 @@
 
 void jobs_init(void);
 
-
-void jobs_add(pid_t pid, const char *cmd, int is_bg);
-
+int jobs_add(pid_t pid, const char *cmd, int is_bg);
 
 void jobs_print(void);
 

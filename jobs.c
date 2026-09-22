@@ -15,7 +15,7 @@ void jobs_init(void) {
 
 // insertamos al final de la lista
 // para un pipeline en backround se debe guardar todos los pids pero por ahora se guarda uno
-void jobs_add(pid_t pid, const char *cmd, int is_bg) {
+int jobs_add(pid_t pid, const char *cmd, int is_bg) {
     (void)is_bg;
 
     Job *new_job = malloc(sizeof(Job));
@@ -41,6 +41,7 @@ void jobs_add(pid_t pid, const char *cmd, int is_bg) {
         }
         curr->next = new_job;
     }
+    return new_job->job_id;
 }
 
 void jobs_print(void) {
