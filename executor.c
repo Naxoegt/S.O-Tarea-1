@@ -185,8 +185,8 @@ static int execute_single_external(Pipeline *pipeline, const char *raw_line) {
     setpgid(pid, pid);
 
     if (pipeline->is_background) {
-        printf("[JOB_STUB] PID: %d\n", (int)pid);
-        jobs_add(pid, raw_line, 1);
+        int job_id = jobs_add(pid, raw_line, 1);
+        printf("[%d] %d\n", job_id, (int)pid);
         return 0;
     } else {
         // foreground, le damos el terminal al proceso hijo y esperamos
@@ -316,8 +316,8 @@ static int execute_pipeline_arbitrary(Pipeline *pipeline, const char *raw_line) 
     free(pipes);
 
     if (pipeline->is_background) {
-        printf("[JOB_STUB] PID: %d\n", (int)pids[0]);
-        jobs_add(pids[0], raw_line, 1);
+        int job_id = jobs_add(pids[0], raw_line, 1);
+        printf("[%d] %d\n", job_id, (int)pids[0]);
         free(pids);
         return 0;
     }
