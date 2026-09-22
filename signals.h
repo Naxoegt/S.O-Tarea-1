@@ -12,4 +12,6 @@ void signals_setup_child(void);
 
 void signals_setup_sigchld(void (*handler)(int));
 
+void sigchld_handler(int sig);
+
 #endif

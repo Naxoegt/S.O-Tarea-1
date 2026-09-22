@@ -2,6 +2,19 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include "jobs.h"
+#include <sys/wait.h>
+#include <errno.h>
+
+// manejador de SIGCHLD 
+static void sigchld_handler(int sig) {
+    (void)sig;
+    int status;
+    pid_t pid;
+    while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+        jobs_mark_finished(pid, status);
+    }
+}
 
 void signals_init_shell(void) {
     struct sigaction sa_ignore;
@@ -25,6 +38,9 @@ void signals_init_shell(void) {
     if (sigaction(SIGTTOU, &sa_ignore, NULL) < 0) {
         perror("mishell: error configurando SIGTTOU");
     }
+
+    //instalamos el manejador de SIGCHLD para recolectar jobs de background
+    signals_setup_sigchld(sigchld_handler);
 }
  
 void signals_setup_child(void) {
@@ -49,4 +65,15 @@ void signals_setup_sigchld(void (*handler)(int)) {
     if (sigaction(SIGCHLD, &sa_chld, NULL) < 0) {
         perror("mishell: error configurando SIGCHLD");
     }
+}
+void sigchld_handler(int sig) {
+    (void)sig;
+    int saved_errno = errno;
+    pid_t pid;
+    int status;
+
+    while ((pid = waitpid(-1, &status, WNOHANG)) > 0) {
+        jobs_mark_finished(pid, status);
+    }
+    errno = saved_errno;
 }
