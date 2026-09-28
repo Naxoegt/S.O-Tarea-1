@@ -41,11 +41,11 @@ make clean
 Ejemplo:
 
 ```bash
-miShell:$ ls -l | grep ".c" | wc -l
+miShell:$ ls -l | grep "\.c$" | wc -l
 miShell:$ sort < entrada.txt > salida.txt
 miShell:$ sleep 30 &
 miShell:$ jobs
-miShell:$ pmon 1
+miShell:$ pmon 2
 ```
 
 ## Estructura
